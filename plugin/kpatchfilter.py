@@ -40,6 +40,8 @@ class KpatchFilter(dnf.Plugin):
         # pre-filter all available versions of the kernel-core package
         kernels_query = self.base.sack.query(flags=hawkey.IGNORE_EXCLUDES)
         kernels_query.filterm(name="kernel-core")
+        # any installed kernel version should not be excluded
+        kernels_query = kernels_query.available()
 
         # Add to the kernels_keep query all kernel-core package versions that are
         # required by any of kpatch-patch-* packages.
