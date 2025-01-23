@@ -22,6 +22,8 @@ import hawkey
 class KpatchFilter(dnf.Plugin):
 
     name = 'kpatchfilter'
+    # list of package names to filter based on kpatch support
+    kernel_pkg_names = ['kernel', 'kernel-core', 'kernel-modules', 'kernel-modules-core', 'kernel-modules-extra']
 
     def __init__(self, base, cli):
         super(KpatchFilter, self).__init__(base, cli)
@@ -32,14 +34,14 @@ class KpatchFilter(dnf.Plugin):
         pass
 
     def sack(self):
-        # This query gradually accumulates all kernels that should be offered to
-        # the user (kernels for which exists kpatch-patch-* package that
-        # requires it). Start with empty query.
+        # This query gradually accumulates all kernel packages that should be
+        # offered to the user (kernels for which exists kpatch-patch-* package
+        # that requires it). Start with empty query.
         kernels_keep = self.base.sack.query().filterm(empty=True)
 
-        # pre-filter all available versions of the kernel-core package
+        # pre-filter all available versions of the kernel* packages
         kernels_query = self.base.sack.query(flags=hawkey.IGNORE_EXCLUDES)
-        kernels_query.filterm(name="kernel-core")
+        kernels_query.filterm(name=self.kernel_pkg_names)
         # any installed kernel version should not be excluded
         kernels_query = kernels_query.available()
 
@@ -47,10 +49,18 @@ class KpatchFilter(dnf.Plugin):
         # required by any of kpatch-patch-* packages.
         kpatch_query = self.base.sack.query(flags=hawkey.IGNORE_EXCLUDES)
         kpatch_query.filterm(name__glob="kpatch-patch-*")
-        for pkg in kpatch_query:
-            for require in pkg.requires:
+        for kpatch_pkg in kpatch_query:
+            for require in kpatch_pkg.requires:
                 if require.name == "kernel-uname-r":
-                    kernels_keep = kernels_keep.union(kernels_query.filter(provides=require))
+                    # get kernel-core package providing "kernel-uname-r = <kpatch_pkg.evra>"
+                    kernel_core = kernels_query.filter(provides=require)
+                    kernel_evr = None
+                    for kernel_core_pkg in kernel_core:
+                        # assume that all such packages have the same evr
+                        kernel_evr = kernel_core_pkg.evr
+                        break
+                    if kernel_evr is not None:
+                        kernels_keep = kernels_keep.union(kernels_query.filter(evr=kernel_evr))
                     # assume the is only one kernel-uname-r requirement
                     break
 
