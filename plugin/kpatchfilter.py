@@ -24,6 +24,7 @@ class KpatchFilter(dnf.Plugin):
     name = 'kpatchfilter'
     # list of package names to filter based on kpatch support
     kernel_pkg_names = ['kernel', 'kernel-core', 'kernel-modules', 'kernel-modules-core', 'kernel-modules-extra']
+    kpatch_requirement = ['kernel', 'kernel-uname-r']
 
     def __init__(self, base, cli):
         super(KpatchFilter, self).__init__(base, cli)
@@ -51,7 +52,10 @@ class KpatchFilter(dnf.Plugin):
         kpatch_query.filterm(name__glob="kpatch-patch-*")
         for kpatch_pkg in kpatch_query:
             for require in kpatch_pkg.requires:
-                if require.name == "kernel-uname-r":
+                require_parsed = str(require).split(' ')
+                if len(require_parsed) < 3:
+                    continue
+                if require_parsed[0] in self.kpatch_requirement:
                     # get kernel-core package providing "kernel-uname-r = <kpatch_pkg.evra>"
                     kernel_core = kernels_query.filter(provides=require)
                     kernel_evr = None
